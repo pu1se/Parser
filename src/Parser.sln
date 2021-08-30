@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Parser.BL", "Parser.BL\Pars
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Parser.Tests", "Tests\Parser.Tests\Parser.Tests.csproj", "{28236904-FF87-43A2-93BF-35491AC2E493}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Parser.ConsoleApp", "Parser.ConsoleApp\Parser.ConsoleApp.csproj", "{649E405C-3D45-4F48-8049-25B32DA5ECD6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -23,6 +25,10 @@ Global
 		{28236904-FF87-43A2-93BF-35491AC2E493}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{28236904-FF87-43A2-93BF-35491AC2E493}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{28236904-FF87-43A2-93BF-35491AC2E493}.Release|Any CPU.Build.0 = Release|Any CPU
+		{649E405C-3D45-4F48-8049-25B32DA5ECD6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{649E405C-3D45-4F48-8049-25B32DA5ECD6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{649E405C-3D45-4F48-8049-25B32DA5ECD6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{649E405C-3D45-4F48-8049-25B32DA5ECD6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
