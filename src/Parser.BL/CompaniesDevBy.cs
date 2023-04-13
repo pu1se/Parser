@@ -144,13 +144,13 @@ namespace Parser.BL
             }
         }
 
-        private static async Task<List<Company>> ParseCompanies(IConfiguration config, string fileName)
+        private static async Task<List<OrganizationEntity>> ParseCompanies(IConfiguration config, string fileName)
         {
             var baseUrl = BaseUrl;
             var document = await BrowsingContext.New(config).OpenAsync(baseUrl);
             var companyTable = document.QuerySelector("#tablesort");
             var companyRows = companyTable.QuerySelectorAll("tr").Skip(1);
-            var companyCollection = new List<Company>();
+            var companyCollection = new List<OrganizationEntity>();
 
             foreach (var companyHtmlRow in companyRows)
             {
@@ -194,7 +194,7 @@ namespace Parser.BL
                 var employeesNumber = companyHtmlRow.QuerySelector("td:nth-child(3)").TextContent.NormolizeText();
                 var reviewNumber = companyHtmlRow.QuerySelector("td:nth-child(5) a")?.TextContent ?? "0";
 
-                var company = new Company
+                var company = new OrganizationEntity()
                 {
                     Name = name,
                     SubLink = subLink,
