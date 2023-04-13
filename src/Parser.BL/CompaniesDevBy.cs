@@ -1,14 +1,12 @@
 ﻿using AngleSharp.Io;
 using AngleSharp;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using AngleSharp.Dom;
+using Newtonsoft.Json;
 
-namespace Parser.ConsoleApp
+namespace Parser.BL
 {
     public  static class CompaniesDevBy
     {
