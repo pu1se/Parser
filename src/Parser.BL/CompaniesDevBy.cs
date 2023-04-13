@@ -4,7 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Parser.BL.Entities;
+using Parser.ConsoleApp;
 
 namespace Parser.BL
 {
@@ -13,15 +16,16 @@ namespace Parser.BL
         const string BaseUrl = "https://companies.devby.io";
         const string FileName = "companies.json";
         static IConfiguration ParserConfig = AngleSharp.Configuration.Default.WithDefaultLoader(new LoaderOptions{IsNavigationDisabled = false, IsResourceLoadingEnabled = true}).WithCss().WithDefaultCookies().WithJs().WithRenderDevice();
+        private static Storage Storage = new Storage();
 
         public static async Task RunLogic()
         {
-            var companies = await GetCompanies();
+            var companies = await FillOrganizations();
 
-            foreach (var company in companies)
+            /*foreach (var company in companies)
             {
                 await FillContactInformation(company);
-            }
+            }*/
         }
 
         static async Task FillAdditionalInformationAboutCompany(Company company)
@@ -87,11 +91,10 @@ namespace Parser.BL
             }
         }
 
-        static async Task<List<Company>> GetCompanies()
+        static async Task<List<OrganizationEntity>> FillOrganizations()
         {
-            
-
-            if (!System.IO.File.Exists(FileName))
+            var organizationsCount = await Storage.Organizations.CountAsync();
+            if (organizationsCount < 100)
             {
                 var companyCollection = await ParseCompanies(ParserConfig, FileName);
 
@@ -110,9 +113,7 @@ namespace Parser.BL
             }
             else
             {
-                var json = await System.IO.File.ReadAllTextAsync(FileName);
-                var companyCollection = JsonConvert.DeserializeObject<List<Company>>(json);
-                return companyCollection;
+                return await Storage.Organizations.Include(x => x.Contacts).ToListAsync();
             }
         }
 
@@ -207,30 +208,7 @@ namespace Parser.BL
             return companyCollection;
         }
     }
-
-    public class Company
-    {
-        public string Name { get; set; }
-        public string SubLink { get; set; }
-        public decimal Rating { get; set; }
-        public int EmployeesNumber { get; set; }
-        public int ReviewNumber { get; set; }
-        public string Email { get; set; }
-        public string Phone { get; set; }
-        public string ContactInfoNotParsed { get; set; }
-        public int HowManyTimesWasViewedByPeople { get; set; }
-        public List<Contact> Contacts { get; set; } = new List<Contact>();
-        public string Description { get; set; }
-    }
-
-    public class Contact
-    {
-        public string Email { get; set; }
-        public string Phone { get; set; }
-        public string Name { get; set; }
-        public string Position { get; set; }
-        public string Url { get; set; }
-    }
+    
 
     public static class Extensions
     {
