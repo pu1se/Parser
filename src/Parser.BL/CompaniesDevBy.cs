@@ -34,19 +34,20 @@ namespace Parser.BL
             var companies = await FillOrganizations();
 
             var counter = 0;
-            foreach (var organization in companies)
+            foreach (var organization in companies.Where(x => x.Description == null))
             {
-                Console.WriteLine(++counter);
+                Console.WriteLine(++counter + " company");
                 await FillAdditionalInformationAboutCompany(organization);
                 await Storage.SaveChangesAsync();
             }
 
-            /*foreach (var organization in companies)
+            counter = 0;
+            foreach (var organization in companies)
             {
-                Console.WriteLine(++counter);
+                Console.WriteLine(++counter + " contact");
                 await FillContactInformation(organization);
                 await Storage.SaveChangesAsync();
-            }*/
+            }
         }
 
         static async Task FillAdditionalInformationAboutCompany(OrganizationEntity organization)
