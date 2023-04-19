@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AngleSharp.Dom;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Parser.BL.Entities;
@@ -20,19 +21,31 @@ namespace Parser.BL
 
         public static async Task RunLogic()
         {
+            Console.ForegroundColor = ConsoleColor.Green;
+
             var companies = await FillOrganizations();
 
-            /*foreach (var company in companies)
+            var counter = 0;
+            foreach (var organization in companies.Where(x => x.Description == null))
             {
-                await FillContactInformation(company);
+                Console.WriteLine(++counter);
+                await FillAdditionalInformationAboutCompany(organization);
+                await Storage.SaveChangesAsync();
+            }
+
+            /*foreach (var organization in companies)
+            {
+                Console.WriteLine(++counter);
+                await FillContactInformation(organization);
+                await Storage.SaveChangesAsync();
             }*/
         }
 
-        static async Task FillAdditionalInformationAboutCompany(Company company)
+        static async Task FillAdditionalInformationAboutCompany(OrganizationEntity organization)
         {
             var document = await BrowsingContext.New(ParserConfig)
-                .OpenAsync(BaseUrl + company.SubLink);
-            
+                .OpenAsync(BaseUrl + organization.SubLink);
+
             /*var contacts = document.QuerySelectorAll(".sidebar-views-contacts ul li").ToList();
             foreach (var contact in contacts)
             {
@@ -46,18 +59,18 @@ namespace Parser.BL
                 switch (text)
                 {
                     case { } email when email.Contains("@"):
-                        company.Email = email;
+                        organization.Email = email;
                         break;
 
                     case { } phone:
-                        company.Phone = phone;
+                        organization.Phone = phone;
                         break;
                 }
             }*/
             var contacts = document.QuerySelectorAll(".widget-companies-agents ul li").ToList();
             foreach (var htmlContact in contacts)
             {
-                var contact = new Contact();
+                var contact = new ContactEntity();
                 var span = htmlContact.QuerySelector("span");
                 if (span != null)
                 {
@@ -71,14 +84,14 @@ namespace Parser.BL
                     contact.Url = a.GetAttribute("href");
                 }
 
-                company.Contacts.Add(contact);
+                organization.Contacts.Add(contact);
             }
 
-            // get company description
+            // get organization description
             var description = document.QuerySelector(".widget-companies-description .description .text");
             if (description != null)
             {
-                company.Description = description.TextContent.NormolizeText();
+                organization.Description = description.TextContent.NormolizeText();
             }
 
 
@@ -87,7 +100,7 @@ namespace Parser.BL
             {
                 // get only numbers from string
                 var number = new string(howManyTimesWasViewed.TextContent.Where(char.IsDigit).ToArray());
-                company.HowManyTimesWasViewedByPeople = int.Parse(number);
+                organization.HowManyTimesWasViewedByPeople = int.Parse(number);
             }
         }
 
@@ -97,18 +110,10 @@ namespace Parser.BL
             if (organizationsCount < 100)
             {
                 var companyCollection = await ParseCompanies(ParserConfig, FileName);
-
-                var counter = 0;
-                foreach (var company in companyCollection)
-                {
-                    Console.WriteLine(++counter);
-                    await FillAdditionalInformationAboutCompany(company);
-                }
-
-                // save to file as json
-                var json = JsonConvert.SerializeObject(companyCollection);
-                await System.IO.File.WriteAllTextAsync(FileName, json);
+                await Storage.Organizations.AddRangeAsync(companyCollection);
+                await Storage.SaveChangesAsync();
                 
+
                 return companyCollection;
             }
             else
@@ -117,9 +122,9 @@ namespace Parser.BL
             }
         }
 
-        static async Task FillContactInformation(Company company)
+        static async Task FillContactInformation(OrganizationEntity organization)
         {
-            foreach (var contact in company.Contacts)
+            foreach (var contact in organization.Contacts)
             {
                 if (contact.Url == null)
                 {
@@ -127,10 +132,14 @@ namespace Parser.BL
                 }
 
                 var document = await BrowsingContext.New(ParserConfig)
-                    .OpenAsync(BaseUrl + contact.Url);
+                    .OpenAsync(contact.Url).WhenStable();
 
-                var htmlProfile = document.QuerySelector(".profile__container .island__item:last-child");
-                var htmlMail = htmlProfile.QuerySelector("a")?.TextContent;
+                await document.WaitForReadyAsync();
+
+                await Task.Delay(2000);
+
+                var htmlProfile = document.QuerySelectorAll(".profile__container").Skip(1).First().QuerySelectorAll(".island__item").Skip(1).FirstOrDefault();
+                var htmlMail = htmlProfile?.QuerySelector("a")?.TextContent;
                 if (htmlMail != null)
                 {
                     contact.Email = htmlMail;
