@@ -5,10 +5,12 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using AngleSharp;
 using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 using AngleSharp.Io;
 using Newtonsoft.Json;
 using Parser.BL;
 using static System.Console;
+using PuppeteerSharp;
 
 namespace Parser.ConsoleApp
 {

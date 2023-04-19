@@ -5,10 +5,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Parser.BL.Entities;
 using Parser.ConsoleApp;
+using PuppeteerSharp;
 
 namespace Parser.BL
 {
@@ -16,8 +18,14 @@ namespace Parser.BL
     {
         const string BaseUrl = "https://companies.devby.io";
         const string FileName = "companies.json";
-        static IConfiguration ParserConfig = AngleSharp.Configuration.Default.WithDefaultLoader(new LoaderOptions{IsNavigationDisabled = false, IsResourceLoadingEnabled = true}).WithCss().WithDefaultCookies().WithJs().WithRenderDevice();
+        static IConfiguration AngleSharpParserConfig = AngleSharp.Configuration.Default.WithDefaultLoader(new LoaderOptions{IsNavigationDisabled = false, IsResourceLoadingEnabled = true}).WithCss().WithDefaultCookies().WithJs().WithRenderDevice();
         private static Storage Storage = new Storage();
+        private static LaunchOptions PuppeterSharpParserConfig = new LaunchOptions
+        {
+            Headless = true,
+            ExecutablePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            
+        };
 
         public static async Task RunLogic()
         {
@@ -26,7 +34,7 @@ namespace Parser.BL
             var companies = await FillOrganizations();
 
             var counter = 0;
-            foreach (var organization in companies.Where(x => x.Description == null))
+            foreach (var organization in companies)
             {
                 Console.WriteLine(++counter);
                 await FillAdditionalInformationAboutCompany(organization);
@@ -43,32 +51,45 @@ namespace Parser.BL
 
         static async Task FillAdditionalInformationAboutCompany(OrganizationEntity organization)
         {
-            var document = await BrowsingContext.New(ParserConfig)
-                .OpenAsync(BaseUrl + organization.SubLink);
+            var url = BaseUrl + organization.SubLink;
 
-            /*var contacts = document.QuerySelectorAll(".sidebar-views-contacts ul li").ToList();
-            foreach (var contact in contacts)
+            using (var browser = await Puppeteer.LaunchAsync(PuppeterSharpParserConfig))
             {
-                var span = contact.QuerySelector("span");
-                if (span == null)
-                {
-                    continue;
-                }
+                var page = await browser.NewPageAsync();
 
-                var text = span.TextContent;
-                switch (text)
+                await page.GoToAsync(url, new NavigationOptions { WaitUntil = new[]
                 {
-                    case { } email when email.Contains("@"):
-                        organization.Email = email;
-                        break;
+                    WaitUntilNavigation.Networkidle2,
+                } });
 
-                    case { } phone:
-                        organization.Phone = phone;
-                        break;
+                var browserContent = await page.GetContentAsync();
+                var parser = new HtmlParser();
+                var document = parser.ParseDocument(browserContent);
+
+                var contacts = document.QuerySelectorAll(".sidebar-views-contacts ul li").ToList();
+                foreach (var contact in contacts)
+                {
+                    var span = contact.QuerySelector("span");
+                    if (span == null)
+                    {
+                        continue;
+                    }
+
+                    var text = span.TextContent;
+                    switch (text)
+                    {
+                        case { } email when email.Contains("@"):
+                            organization.Email = email;
+                            break;
+
+                        case { } phone:
+                            organization.Phone = phone;
+                            break;
+                    }
                 }
-            }*/
-            var contacts = document.QuerySelectorAll(".widget-companies-agents ul li").ToList();
-            foreach (var htmlContact in contacts)
+            
+            var personContacts = document.QuerySelectorAll(".widget-companies-agents ul li").ToList();
+            foreach (var htmlContact in personContacts)
             {
                 var contact = new ContactEntity();
                 var span = htmlContact.QuerySelector("span");
@@ -102,6 +123,7 @@ namespace Parser.BL
                 var number = new string(howManyTimesWasViewed.TextContent.Where(char.IsDigit).ToArray());
                 organization.HowManyTimesWasViewedByPeople = int.Parse(number);
             }
+            }
         }
 
         static async Task<List<OrganizationEntity>> FillOrganizations()
@@ -109,7 +131,7 @@ namespace Parser.BL
             var organizationsCount = await Storage.Organizations.CountAsync();
             if (organizationsCount < 100)
             {
-                var companyCollection = await ParseCompanies(ParserConfig, FileName);
+                var companyCollection = await ParseCompanies(AngleSharpParserConfig, FileName);
                 await Storage.Organizations.AddRangeAsync(companyCollection);
                 await Storage.SaveChangesAsync();
                 
@@ -131,24 +153,30 @@ namespace Parser.BL
                     continue;
                 }
 
-                var document = await BrowsingContext.New(ParserConfig)
-                    .OpenAsync(contact.Url).WhenStable();
-
-                await document.WaitForReadyAsync();
-
-                await Task.Delay(2000);
-
-                var htmlProfile = document.QuerySelectorAll(".profile__container").Skip(1).First().QuerySelectorAll(".island__item").Skip(1).FirstOrDefault();
-                var htmlMail = htmlProfile?.QuerySelector("a")?.TextContent;
-                if (htmlMail != null)
+                using (var browser = await Puppeteer.LaunchAsync(PuppeterSharpParserConfig))
                 {
-                    contact.Email = htmlMail;
-                }
+                    var page = await browser.NewPageAsync();
 
-                var htmlPhone = htmlProfile.QuerySelector("div")?.TextContent;
-                if (htmlPhone != null)
-                {
-                    contact.Phone = htmlPhone;
+                    await page.GoToAsync(contact.Url,
+                        new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Networkidle0 } });
+
+                    var browserContent = await page.GetContentAsync();
+                    var parser = new HtmlParser();
+                    var document = parser.ParseDocument(browserContent);
+
+                    var htmlProfile = document.QuerySelectorAll(".profile__container").Skip(1).First()
+                        .QuerySelectorAll(".island__item").Skip(1).FirstOrDefault();
+                    var htmlMail = htmlProfile?.QuerySelector("a")?.TextContent;
+                    if (htmlMail != null)
+                    {
+                        contact.Email = htmlMail;
+                    }
+
+                    var htmlPhone = htmlProfile.QuerySelector("div")?.TextContent;
+                    if (htmlPhone != null)
+                    {
+                        contact.Phone = htmlPhone;
+                    }
                 }
             }
         }
