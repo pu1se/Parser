@@ -2,15 +2,22 @@
 using AngleSharp;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using OpenQA.Selenium.Chrome;
 using Parser.BL.Entities;
 using Parser.ConsoleApp;
 using PuppeteerSharp;
+using OpenQA.Selenium.Support.UI;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Edge;
+using OpenQA.Selenium.Firefox;
+using SeleniumExtras.WaitHelpers;
 
 namespace Parser.BL
 {
@@ -32,36 +39,97 @@ namespace Parser.BL
             Console.ForegroundColor = ConsoleColor.Green;
 
             var companies = await FillOrganizations();
-
             var counter = 0;
-            foreach (var organization in companies.Where(x => x.Description == null))
+
+            foreach (var organization in companies.Where(x => x.Email == null).Skip(10))
             {
                 Console.WriteLine(++counter + " company");
                 await FillAdditionalInformationAboutCompany(organization);
                 await Storage.SaveChangesAsync();
             }
 
-            counter = 0;
-            foreach (var organization in companies)
-            {
-                Console.WriteLine(++counter + " contact");
-                await FillContactInformation(organization);
-                await Storage.SaveChangesAsync();
-            }
+            // await FillContactInformation();
         }
 
         static async Task FillAdditionalInformationAboutCompany(OrganizationEntity organization)
         {
             var url = BaseUrl + organization.SubLink;
 
+            var driver = new EdgeDriver();
+            driver.Navigate().GoToUrl(url);
+
+            await Task.Delay(15000);
+
+            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(15));
+            ReadOnlyCollection<IWebElement> contacts = null;
+            try
+            {
+                contacts = wait.Until(
+                    ExpectedConditions.VisibilityOfAllElementsLocatedBy(
+                        By.CssSelector(".sidebar-views-contacts ul li")));
+            }
+            catch(Exception ex)
+            {
+                // ignored
+            }
+
+            if (contacts != null)
+            {
+                foreach (var contact in contacts)
+                {
+                    IWebElement span = null;
+                    try
+                    {
+                        span = contact.FindElement(By.CssSelector("span"));
+                    }
+                    catch(Exception ex)
+                    {
+                        // ignored
+                    }
+
+                    if (span == null)
+                    {
+                        continue;
+                    }
+
+                    var text = span.Text;
+
+                    if (text == null || text.Contains("..."))
+                    {
+                        continue;
+                    }
+
+                    switch (text)
+                    {
+                        case { } email when email.Contains("@"):
+                            organization.Email = email;
+                            break;
+
+                        case { } phone:
+                            organization.Phone = phone;
+                            break;
+                    }
+                }
+            }
+
+            
+
+            driver.Quit();
+
+            /*
+            var document = await BrowsingContext.New(AngleSharpParserConfig)
+                .OpenAsync(url); 
             using (var browser = await Puppeteer.LaunchAsync(PuppeterSharpParserConfig))
             {
                 var page = await browser.NewPageAsync();
 
-                await page.GoToAsync(url, new NavigationOptions { WaitUntil = new[]
+                await page.GoToAsync(url, new NavigationOptions
                 {
-                    WaitUntilNavigation.Networkidle2,
-                } });
+                    WaitUntil = new[]
+                    {
+                        WaitUntilNavigation.Networkidle2,
+                    }
+                });
 
                 var browserContent = await page.GetContentAsync();
                 var parser = new HtmlParser();
@@ -88,8 +156,9 @@ namespace Parser.BL
                             break;
                     }
                 }
-            
-            var personContacts = document.QuerySelectorAll(".widget-companies-agents ul li").ToList();
+            }*/
+
+            /*var personContacts = document.QuerySelectorAll(".widget-companies-agents ul li").ToList();
             foreach (var htmlContact in personContacts)
             {
                 var contact = new ContactEntity();
@@ -123,8 +192,7 @@ namespace Parser.BL
                 // get only numbers from string
                 var number = new string(howManyTimesWasViewed.TextContent.Where(char.IsDigit).ToArray());
                 organization.HowManyTimesWasViewedByPeople = int.Parse(number);
-            }
-            }
+            }*/
         }
 
         static async Task<List<OrganizationEntity>> FillOrganizations()
@@ -145,10 +213,15 @@ namespace Parser.BL
             }
         }
 
-        static async Task FillContactInformation(OrganizationEntity organization)
+        static async Task FillContactInformation()
         {
-            foreach (var contact in organization.Contacts)
+            var count = 0;
+            var contacts = await Storage.Contacts.Where(e => e.Email == null).ToListAsync();
+
+            foreach (var contact in contacts)
             {
+                Console.WriteLine(count++ + " contact");
+
                 if (contact.Url == null)
                 {
                     continue;
@@ -165,19 +238,25 @@ namespace Parser.BL
                     var parser = new HtmlParser();
                     var document = parser.ParseDocument(browserContent);
 
-                    var htmlProfile = document.QuerySelectorAll(".profile__container").Skip(1).First()
-                        .QuerySelectorAll(".island__item").Skip(1).FirstOrDefault();
+                    var htmlProfile = document.QuerySelectorAll(".profile__container").Skip(1).FirstOrDefault()
+                        ?.QuerySelectorAll(".island__item").Skip(1).FirstOrDefault();
                     var htmlMail = htmlProfile?.QuerySelector("a")?.TextContent;
                     if (htmlMail != null)
                     {
                         contact.Email = htmlMail;
                     }
 
-                    var htmlPhone = htmlProfile.QuerySelector("div")?.TextContent;
+                    var htmlPhone = htmlProfile?.QuerySelector("div")?.TextContent;
                     if (htmlPhone != null)
                     {
                         contact.Phone = htmlPhone;
                     }
+                }
+
+                if (count % 10 == 0)
+                {
+                    Console.WriteLine("Save");
+                    await Storage.SaveChangesAsync();
                 }
             }
         }
